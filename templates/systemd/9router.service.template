@@ -1,0 +1,29 @@
+[Unit]
+Description=9router Linux - AI Gateway & Dashboard
+Documentation=https://github.com/dashbehrad/9router-linux
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__SERVICE_USER__
+Group=__SERVICE_GROUP__
+WorkingDirectory=__INSTALL_DIR__
+EnvironmentFile=__INSTALL_DIR__/.env
+ExecStart=/usr/bin/node __INSTALL_DIR__/custom-server.js
+Restart=always
+RestartSec=5
+KillMode=process
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=9router
+LimitNOFILE=65536
+
+# Security Hardening
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=__INSTALL_DIR__/data __INSTALL_DIR__/data-home
+
+[Install]
+WantedBy=multi-user.target

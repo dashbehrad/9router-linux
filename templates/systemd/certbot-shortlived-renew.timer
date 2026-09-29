@@ -1,0 +1,12 @@
+[Unit]
+Description=9router Linux - Run Certbot Short-Lived IP Certificate Renewal Every 6 Hours
+Documentation=https://github.com/dashbehrad/9router-linux
+
+[Timer]
+# Run every 6 hours with a 15-minute randomized jitter to prevent thundering herd on ACME server
+OnCalendar=*-*-* 00,06,12,18:00:00
+RandomizedDelaySec=900
+Persistent=true
+
+[Install]
+WantedBy=timers.target

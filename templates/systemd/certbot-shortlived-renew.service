@@ -1,0 +1,11 @@
+[Unit]
+Description=9router Linux - Certbot Short-Lived IP Certificate Renewal
+Documentation=https://github.com/dashbehrad/9router-linux
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/certbot renew --webroot -w /var/www/certbot --quiet --deploy-hook "/etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh"
+StandardOutput=journal
+StandardError=journal
