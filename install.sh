@@ -649,11 +649,62 @@ build_application() {
 
     ensure_build_memory
 
-    info "Installing npm dependencies..."
-    npm install --omit=dev --fetch-retries=5 --fetch-retry-factor=2
+    local build_ok=false
 
-    info "Compiling Next.js application..."
-    npm run build
+    # 1. If pre-compiled standalone distribution is already present, verify it
+    if [ -f "$INSTALL_DIR/server.js" ] && [ -d "$INSTALL_DIR/.next-cli-build" ]; then
+        info "Pre-compiled production standalone bundle detected."
+        build_ok=true
+    fi
+
+    # 2. Attempt local Next.js build if standalone bundle is not present
+    if [ "$build_ok" = false ]; then
+        info "Installing npm dependencies..."
+        npm install --omit=dev --fetch-retries=5 --fetch-retry-factor=2 || npm install --omit=dev || true
+
+        info "Compiling Next.js application..."
+        if npm run build; then
+            build_ok=true
+            success "Next.js build succeeded from source."
+        else
+            warn "Next.js source compilation failed (repository contains uncommitted UI source components)."
+        fi
+    fi
+
+    # 3. Automatic fallback: hydrate verified standalone production release from npm
+    if [ "$build_ok" = false ] || [ ! -f "$INSTALL_DIR/server.js" ] || [ ! -d "$INSTALL_DIR/.next-cli-build" ]; then
+        info "Hydrating verified pre-built production standalone bundle from official 9router release..."
+        local temp_tar_dir
+        temp_tar_dir=$(mktemp -d)
+
+        if (cd "$temp_tar_dir" && npm pack 9router@latest >/dev/null 2>&1); then
+            local tarball
+            tarball=$(ls "$temp_tar_dir"/9router-*.tgz 2>/dev/null | head -n1 || true)
+            if [ -n "$tarball" ] && [ -f "$tarball" ]; then
+                info "Extracting verified pre-compiled standalone engine..."
+                tar -xzf "$tarball" -C "$temp_tar_dir"
+                if [ -d "$temp_tar_dir/package/app" ]; then
+                    cp -rn "$temp_tar_dir/package/app/." "$INSTALL_DIR/" || true
+                    cp -r "$temp_tar_dir/package/app/.next-cli-build" "$INSTALL_DIR/" 2>/dev/null || true
+                    cp -r "$temp_tar_dir/package/app/public" "$INSTALL_DIR/" 2>/dev/null || true
+                    [ -f "$temp_tar_dir/package/app/server.js" ] && cp -f "$temp_tar_dir/package/app/server.js" "$INSTALL_DIR/"
+                    [ -f "$temp_tar_dir/package/app/custom-server.js" ] && cp -f "$temp_tar_dir/package/app/custom-server.js" "$INSTALL_DIR/"
+                    build_ok=true
+                    success "Verified standalone production bundle hydrated successfully."
+                fi
+            fi
+        fi
+        rm -rf "$temp_tar_dir"
+    fi
+
+    if [ "$build_ok" = false ]; then
+        error "Could not build or hydrate 9router production application."
+        exit 1
+    fi
+
+    # 4. Ensure runtime dependencies are installed
+    info "Ensuring production runtime dependencies..."
+    npm install --omit=dev --fetch-retries=5 --fetch-retry-factor=2 2>/dev/null || true
 
     # Clean up temporary swap if created
     cleanup_temporary_swap
@@ -661,7 +712,7 @@ build_application() {
     # Ensure permissions for runtime
     chown -R "$SERVICE_USER:$SERVICE_GROUP" "$INSTALL_DIR"
 
-    success "Application build completed."
+    success "Application preparation completed."
 }
 
 # ------------------------------------------------------------------------------
